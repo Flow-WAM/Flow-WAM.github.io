@@ -1,0 +1,1305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FlowWAM — Optical Flow as a Unified Action Representation for World Action Models</title>
+
+  <meta name="description" content="FlowWAM: a dual-stream diffusion framework that adopts optical flow as a unified, video-native action representation for World Action Models. 90.24% on RoboTwin Clean, 89.38% on Random, 63.71 EWMScore on WorldArena." />
+  <meta name="robots" content="index,follow" />
+
+  <meta property="og:title" content="FlowWAM — Optical Flow as a Unified Action Representation for World Action Models" />
+  <meta property="og:description" content="A dual-stream diffusion framework that uses optical flow as a unified, video-native action representation for World Action Models." />
+  <meta property="og:image" content="./static/images/teaser.png" />
+  <meta property="og:type" content="website" />
+
+  <link rel="icon" type="image/png" href="./static/images/icon_light.png" />
+  <link rel="apple-touch-icon" href="./static/images/icon_light.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            display: ['Inter', 'system-ui', 'sans-serif'],
+            serif: ['Georgia', 'serif'],
+            mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+          },
+          colors: {
+            ink: {
+              900: '#1C1917',
+              700: '#292524',
+              500: '#57534E',
+              400: '#78716C',
+              300: '#A8A29E',
+              100: '#E7E5E4',
+              50: '#F5F5F4',
+            },
+            cream: '#FAF8F4',
+          },
+          animation: {
+            'blob-slow': 'blob 28s ease-in-out infinite',
+            'blob-slower': 'blob 36s ease-in-out infinite',
+            'float': 'float 7s ease-in-out infinite',
+          },
+          keyframes: {
+            blob: {
+              '0%,100%': { transform: 'translate(0,0) scale(1)' },
+              '33%': { transform: 'translate(30px,-20px) scale(1.05)' },
+              '66%': { transform: 'translate(-20px,20px) scale(0.97)' },
+            },
+            float: {
+              '0%,100%': { transform: 'translateY(0)' },
+              '50%': { transform: 'translateY(-8px)' },
+            },
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: #FAF8F4;
+      color: #1C1917;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
+      letter-spacing: 0;
+    }
+    /* Display headings — Inter, lightly tightened */
+    h1, h2, h3, h4, h5, .font-display {
+      font-family: 'Inter', system-ui, sans-serif;
+      letter-spacing: -0.018em;
+    }
+    /* Big numbers: tabular alignment */
+    .num {
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.025em;
+      font-feature-settings: 'tnum';
+    }
+    /* Wordmark (kept on the sans stack) */
+    .wordmark {
+      font-family: 'Inter', system-ui, sans-serif;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+    }
+    /* Mono blocks */
+    .font-mono, code, pre {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    /* (grain overlay removed for a cleaner, calmer surface) */
+
+    /* Single accent (indigo) — used sparingly for key highlights */
+    .accent-text { color: #C2410C; }
+
+    /* Blob backgrounds — removed from layout; kept extremely faint where used */
+    .blob {
+      position: absolute;
+      border-radius: 9999px;
+      filter: blur(120px);
+      opacity: 0.07;
+      pointer-events: none;
+    }
+
+    /* Glass card — clean white */
+    .glass {
+      background: rgba(255, 255, 255, 0.82);
+      backdrop-filter: blur(16px) saturate(110%);
+      -webkit-backdrop-filter: blur(16px) saturate(110%);
+      border: 1px solid rgba(28, 25, 23, 0.07);
+      box-shadow: 0 2px 14px -8px rgba(28, 25, 23, 0.10);
+    }
+
+    /* Image frame — neutral hairline + soft shadow (replaces rainbow border) */
+    .gradient-border {
+      position: relative;
+      background: #FFFFFF;
+      border: 1px solid rgba(28, 25, 23, 0.08);
+      border-radius: 24px;
+      box-shadow: 0 12px 32px -20px rgba(28, 25, 23, 0.20);
+    }
+
+    /* Primary button — solid indigo */
+    .btn-gradient {
+      background: #C2410C;
+      transition: transform 0.2s ease, box-shadow 0.3s ease, background 0.2s ease;
+      box-shadow: 0 4px 14px -6px rgba(194, 65, 12, 0.45);
+    }
+    .btn-gradient:hover {
+      transform: translateY(-1px);
+      background: #9A3412;
+      box-shadow: 0 8px 22px -8px rgba(194, 65, 12, 0.5);
+    }
+    .btn-ghost {
+      background: rgba(28, 25, 23, 0.04);
+      border: 1px solid rgba(28, 25, 23, 0.08);
+      transition: all 0.2s ease;
+    }
+    .btn-ghost:hover {
+      background: rgba(28, 25, 23, 0.07);
+      border-color: rgba(28, 25, 23, 0.14);
+    }
+
+    /* Card hover */
+    .lift {
+      transition: transform 0.4s cubic-bezier(0.22,1,0.36,1), box-shadow 0.4s ease, border-color 0.3s ease;
+    }
+    .lift:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 16px 32px -16px rgba(28, 25, 23, 0.18);
+    }
+
+    /* Stat card */
+    .stat-card {
+      background: #FFFFFF;
+      border: 1px solid rgba(28, 25, 23, 0.06);
+      box-shadow: 0 1px 3px rgba(28, 25, 23, 0.04);
+    }
+
+    /* Scroll reveal */
+    .reveal {
+      opacity: 0;
+      transform: translateY(28px);
+      transition: opacity 0.9s cubic-bezier(0.22,1,0.36,1), transform 0.9s cubic-bezier(0.22,1,0.36,1);
+      will-change: transform, opacity;
+    }
+    .reveal.in {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* Logo container — clean white with soft shadow, no busy ring */
+    .logo-frame {
+      position: relative;
+      border-radius: 9999px;
+      background: #FFFFFF;
+      box-shadow:
+        0 0 0 1px rgba(28, 25, 23, 0.06),
+        0 4px 14px -6px rgba(28, 25, 23, 0.12);
+    }
+    .logo-frame img {
+      display: block;
+      border-radius: 9999px;
+      background: #FFFFFF;
+    }
+    /* Hero logo gets a soft halo, but much more subtle */
+    .logo-frame.hero-halo {
+      box-shadow:
+        0 0 0 1px rgba(28, 25, 23, 0.05),
+        0 0 0 8px rgba(28, 25, 23, 0.03),
+        0 14px 40px -16px rgba(28, 25, 23, 0.20);
+    }
+
+    /* Table */
+    .ftable {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: 0.95rem;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.008em;
+    }
+    .ftable th, .ftable td {
+      padding: 16px 20px;
+      text-align: center;
+      vertical-align: middle;
+    }
+    .ftable thead th {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-weight: 500;
+      color: #57534E;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      border-bottom: 1px solid #E7E5E4;
+      padding-top: 14px;
+      padding-bottom: 14px;
+    }
+    .ftable tbody tr {
+      transition: background 0.25s ease;
+    }
+    .ftable tbody tr:not(:last-child) td {
+      border-bottom: 1px solid #F5F5F4;
+    }
+    .ftable tbody tr:hover {
+      background: rgba(194,65,12,0.04);
+    }
+    .ftable .name {
+      text-align: left;
+      font-weight: 500;
+      color: #292524;
+      font-size: 0.97rem;
+    }
+    .ftable .type-cell {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 0.78rem;
+      font-weight: 500;
+      color: #78716C;
+      letter-spacing: 0.04em;
+    }
+    .ftable .num-cell {
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
+      color: #292524;
+      letter-spacing: -0.015em;
+    }
+    .ftable .highlight {
+      background: rgba(194,65,12,0.06);
+    }
+    .ftable .highlight td {
+      font-weight: 600;
+      color: #1C1917;
+    }
+    .ftable .highlight .name {
+      color: #1C1917;
+      font-weight: 600;
+    }
+    .ftable .best,
+    .ftable .highlight td.best {
+      color: #9A3412;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    /* Faint vertical dividers between data columns */
+    .ftable th + th, .ftable td + td {
+      position: relative;
+    }
+
+    /* Mode card — clean light card, color-coded by a thin top accent */
+    .mode-card {
+      position: relative;
+      overflow: hidden;
+      border-radius: 24px;
+      padding: 32px;
+      background: #FFFFFF;
+      border: 1px solid rgba(28, 25, 23, 0.08);
+      color: #57534E;
+      min-height: 380px;
+      box-shadow: 0 4px 18px -10px rgba(28, 25, 23, 0.10);
+      transition: transform 0.4s cubic-bezier(0.22,1,0.36,1), box-shadow 0.4s ease, border-color 0.3s ease;
+    }
+    .mode-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 18px 38px -22px rgba(28, 25, 23, 0.16);
+    }
+    .mode-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 4px;
+    }
+    .mode-card .label {
+      font-family: 'JetBrains Mono', monospace;
+      letter-spacing: 0.18em;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+    .mode-policy::before { background: #C2410C; }
+    .mode-world::before  { background: #B45309; }
+    .mode-policy .label  { color: #C2410C; }
+    .mode-world .label   { color: #B45309; }
+
+    /* Code block */
+    pre.bibtex {
+      background: #1C1917;
+      color: #E7E5E4;
+      padding: 28px 28px;
+      border-radius: 16px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.86rem;
+      line-height: 1.7;
+      overflow-x: auto;
+    }
+    pre.bibtex .k { color: #FDBA74; }
+    pre.bibtex .v { color: #FED7AA; }
+    pre.bibtex .s { color: #FED7AA; }
+
+    /* Video gallery */
+    /* Gallery nav arrows — overlaid on the video sides; grow + turn accent on hover */
+    .gallery-nav {
+      color: #44403C;
+      box-shadow: 0 6px 18px -8px rgba(28, 25, 23, 0.35);
+      transition: transform 0.2s ease, background 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.3s ease;
+    }
+    .gallery-nav:hover {
+      color: #fff;
+      background: #C2410C;
+      border-color: transparent;
+      transform: scale(1.08);
+      box-shadow: 0 10px 24px -8px rgba(194, 65, 12, 0.6);
+    }
+    .gallery-nav:active { transform: scale(0.96); }
+    .gallery-nav:focus-visible { outline: 2px solid #C2410C; outline-offset: 2px; }
+    .subtab {
+      padding: 9px 26px;
+      border-radius: 9999px;
+      font-size: 1rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: #57534E;
+      background: transparent;
+      border: 0;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+    .subtab:hover { color: #1C1917; }
+    .subtab:focus-visible { outline: 2px solid #C2410C; outline-offset: 2px; }
+    .subtab.active {
+      background: #C2410C;
+      color: #fff;
+      box-shadow: 0 6px 18px -7px rgba(194, 65, 12, 0.5);
+    }
+    .dot {
+      width: 11px; height: 11px; border-radius: 9999px;
+      background: rgba(28,25,23,0.22);
+      border: 0; padding: 0;
+      transition: all 0.35s cubic-bezier(0.22,1,0.36,1);
+      cursor: pointer;
+    }
+    .dot:hover { background: rgba(28,25,23,0.42); }
+    .dot:focus-visible { outline: 2px solid #C2410C; outline-offset: 2px; }
+    .dot.active {
+      width: 34px;
+      background: #C2410C;
+    }
+
+    /* Custom scrollbar */
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(28, 25, 23, 0.18);
+      border-radius: 9999px;
+      border: 2px solid #FAF8F4;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(28, 25, 23, 0.3);
+    }
+
+    /* Section dividing line */
+    .grad-line {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(28,25,23,0.12), transparent);
+    }
+
+    /* Math */
+    .math {
+      font-family: 'JetBrains Mono', monospace;
+      font-style: italic;
+    }
+
+    /* Author link hover */
+    .author-link {
+      color: #292524;
+      white-space: nowrap;
+      transition: color 0.2s ease, text-decoration-color 0.2s ease;
+      text-decoration: underline;
+      text-decoration-color: transparent;
+      text-underline-offset: 3px;
+    }
+    .author-link:hover {
+      color: #C2410C;
+      text-decoration-color: currentColor;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ============================================ -->
+  <!-- 1. NAVIGATION                                -->
+  <!-- ============================================ -->
+  <nav class="fixed top-0 inset-x-0 z-50">
+    <div class="mx-auto max-w-7xl px-5 lg:px-8">
+      <div class="mt-4 glass rounded-2xl px-5 py-3 flex items-center justify-between">
+        <a href="#top" class="flex items-center gap-3 group">
+          <div class="logo-frame w-10 h-10 overflow-hidden group-hover:scale-105 transition-transform">
+            <img src="./static/images/icon_light.png" alt="FlowWAM" class="w-full h-full object-contain" />
+          </div>
+          <span class="font-display font-semibold text-lg tracking-tight accent-text">FlowWAM</span>
+        </a>
+
+        <div class="hidden lg:flex items-center gap-7 text-sm font-medium text-ink-500">
+          <a href="#tldr" class="hover:text-ink-900 transition">TL;DR</a>
+          <a href="#method" class="hover:text-ink-900 transition">Method</a>
+          <a href="#modes" class="hover:text-ink-900 transition">Two Modes</a>
+          <a href="#experiments" class="hover:text-ink-900 transition">Experiments</a>
+          <a href="#results" class="hover:text-ink-900 transition">Results</a>
+          <a href="#bibtex" class="hover:text-ink-900 transition">BibTeX</a>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <div class="hidden md:block relative group">
+            <button class="btn-ghost text-sm font-medium px-3.5 py-2 rounded-full flex items-center gap-2">
+              <i class="fa-solid fa-cube text-xs"></i>
+              More Research
+              <i class="fa-solid fa-chevron-down text-[10px] mt-0.5"></i>
+            </button>
+            <div class="absolute right-0 top-full mt-2 hidden group-hover:block">
+              <div class="glass rounded-xl p-2 min-w-[200px] shadow-xl">
+                <a href="https://ec-flow1.github.io/" target="_blank" class="block px-3 py-2 rounded-lg hover:bg-ink-50 text-sm font-medium">
+                  EC-Flow <span class="text-xs text-ink-400 ml-1">ICCV 2025</span>
+                </a>
+                <a href="https://BridgeV2W.github.io/" target="_blank" class="block px-3 py-2 rounded-lg hover:bg-ink-50 text-sm font-medium">
+                  BridgeV2W
+                </a>
+                <a href="https://verm-ral.github.io/" target="_blank" class="block px-3 py-2 rounded-lg hover:bg-ink-50 text-sm font-medium">
+                  VERM <span class="text-xs text-ink-400 ml-1">RA-L 2025</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ============================================ -->
+  <!-- 2. HERO                                      -->
+  <!-- ============================================ -->
+  <header id="top" class="relative overflow-hidden pt-32 pb-20 lg:pt-44 lg:pb-28">
+    <!-- Background: a single, very faint indigo wash for subtle depth -->
+    <div class="blob w-[560px] h-[560px] -top-40 -left-40 animate-blob-slow" style="background: radial-gradient(circle at 30% 30%, #C2410C, transparent 70%);"></div>
+
+    <!-- Grid texture overlay — very faint -->
+    <div class="absolute inset-0 pointer-events-none" style="background-image:
+      linear-gradient(rgba(28,25,23,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(28,25,23,0.025) 1px, transparent 1px);
+      background-size: 56px 56px; mask-image: radial-gradient(ellipse at center, black 25%, transparent 75%); -webkit-mask-image: radial-gradient(ellipse at center, black 25%, transparent 75%);"></div>
+
+    <div class="relative mx-auto max-w-6xl px-5 lg:px-8 text-center">
+      <!-- Floating logo -->
+      <div class="flex justify-center mb-8 reveal">
+        <div class="logo-frame hero-halo w-28 h-28 lg:w-32 lg:h-32 overflow-hidden animate-float">
+          <img src="./static/images/icon_light.png" alt="FlowWAM Logo" class="w-full h-full object-contain" />
+        </div>
+      </div>
+
+      <!-- Venue pill -->
+      <div class="flex justify-center mb-6 reveal">
+        <span class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-[11px] font-mono font-medium tracking-wider uppercase glass text-ink-500">
+          <span class="w-1.5 h-1.5 rounded-full" style="background: #C2410C;"></span>
+          Arxiv 2026 · Preprint
+        </span>
+      </div>
+
+      <!-- Title -->
+      <h1 class="font-display text-6xl sm:text-7xl lg:text-8xl leading-[0.95] mb-6 reveal text-ink-900" style="font-weight: 700; letter-spacing: -0.035em;">
+        FlowWAM
+      </h1>
+
+      <!-- Subtitle — the core message; carries the single indigo accent -->
+      <p class="max-w-4xl mx-auto text-2xl sm:text-3xl lg:text-[2.4rem] leading-[1.2] text-ink-900 mb-12 reveal" style="font-weight: 500; letter-spacing: -0.02em;">
+        Optical Flow as a <span class="accent-text" style="font-weight: 700;">Unified Action Representation</span> for World Action Models
+      </p>
+
+      <!-- Authors -->
+      <div class="max-w-5xl mx-auto text-lg sm:text-xl text-ink-700 leading-[1.85] mb-4 reveal" style="letter-spacing: -0.008em;">
+        <a href="https://yixiang-chen.cn/" target="_blank" class="author-link">Yixiang Chen</a><sup class="text-ink-400 text-sm">1,2,∗</sup>,
+        <a href="https://scholar.google.com/citations?user=b8z2YcYAAAAJ&hl=en" target="_blank" class="author-link">Peiyan Li</a><sup class="text-ink-400 text-sm">1,2,∗</sup>,
+        <a href="https://scholar.google.com/citations?user=vzUBE0oAAAAJ&hl=en&oi=sra">Yuan Xu</a><sup class="text-ink-400 text-sm">1,2</sup>,
+        <a href="#" class="author-link">Qisen Ma</a><sup class="text-ink-400 text-sm">1,2</sup>,
+        <a href="https://jiabingyang.cn/" target="_blank" class="author-link">Jiabing Yang</a><sup class="text-ink-400 text-sm">1,2</sup>,
+        <a href="#" class="author-link">Kai Wang</a><sup class="text-ink-400 text-sm">1,2</sup>,
+        <a href="https://scholar.google.com/citations?user=zGukVpQAAAAJ&hl=vi">Jianhua Yang</a><sup class="text-ink-400 text-sm">1,2</sup>,
+        <a href="https://scholar.google.com/citations?hl=en&user=8Zdbbz0AAAAJ">Dong An</a><sup class="text-ink-400 text-sm">4</sup>,
+        <a href="https://scholar.google.com/citations?hl=en&user=5XBfDFcAAAAJ">He Guan</a><sup class="text-ink-400 text-sm">3</sup>,
+        <a href="#" class="author-link">Gaoteng Liu</a><sup class="text-ink-400 text-sm">3</sup>,
+        <a href="https://scholar.google.com/citations?hl=en&user=N21o7qoAAAAJ">Jianlou Si</a><sup class="text-ink-400 text-sm">5</sup>,
+        <a href="https://scholar.google.com/citations?hl=en&user=-bxeZs8AAAAJ">Jun Huang</a><sup class="text-ink-400 text-sm">5</sup>,
+        <a href="#" class="author-link">Jing Liu</a><sup class="text-ink-400 text-sm">3</sup>,
+        <a href="#" class="author-link">Nianfeng Liu</a><sup class="text-ink-400 text-sm">3</sup>,
+        <a href="https://scholar.google.com/citations?user=6nUJrQ0AAAAJ" target="_blank" class="author-link">Yan Huang</a><sup class="text-ink-400 text-sm">1,2,3,†</sup>,
+        <a href="https://scholar.google.com/citations?user=8kzzUboAAAAJ" target="_blank" class="author-link">Liang Wang</a><sup class="text-ink-400 text-sm">1,2,†</sup>
+      </div>
+
+      <div class="text-sm text-ink-400 mb-5 reveal">
+        <sup>∗</sup> Equal contribution &nbsp;·&nbsp; <sup>†</sup> Corresponding authors
+      </div>
+
+      <div class="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm sm:text-base text-ink-500 mb-12 reveal">
+        <span><sup>1</sup> <a href="http://cripac.ia.ac.cn/" target="_blank" class="hover:text-ink-900 underline decoration-dotted">CASIA-NLPR</a></span>
+        <span><sup>2</sup> <a href="https://english.ucas.ac.cn/" target="_blank" class="hover:text-ink-900 underline decoration-dotted">UCAS</a></span>
+        <span><sup>3</sup> FiveAges</span>
+        <span><sup>4</sup> MBZUAI</span>
+        <span><sup>5</sup> Alibaba Group</span>
+      </div>
+
+      <!-- Buttons -->
+      <div class="flex flex-wrap items-center justify-center gap-3 reveal">
+        <a href="#" class="btn-gradient px-6 py-3 rounded-full text-white font-medium inline-flex items-center gap-2 text-sm">
+          <i class="fa-solid fa-file-pdf"></i> Paper
+        </a>
+        <a href="#" class="btn-gradient px-6 py-3 rounded-full text-white font-medium inline-flex items-center gap-2 text-sm">
+          <i class="ai ai-arxiv"></i> arXiv
+        </a>
+        <a href="#" class="btn-ghost px-6 py-3 rounded-full text-ink-900 font-medium inline-flex items-center gap-2 text-sm">
+          <i class="fa-brands fa-github"></i> Code
+        </a>
+        <a href="#bibtex" class="btn-ghost px-6 py-3 rounded-full text-ink-900 font-medium inline-flex items-center gap-2 text-sm">
+          <i class="fa-solid fa-quote-right"></i> BibTeX
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============================================ -->
+  <!-- 3. TL;DR                                     -->
+  <!-- ============================================ -->
+  <section id="tldr" class="relative py-12">
+    <div class="mx-auto max-w-5xl px-5 lg:px-8">
+      <div class="reveal relative rounded-2xl p-8 lg:p-10 glass overflow-hidden">
+        <div class="absolute left-0 top-0 bottom-0 w-1" style="background: #C2410C;"></div>
+        <div class="flex items-start gap-6">
+          <div class="hidden md:flex shrink-0 w-12 h-12 items-center justify-center rounded-xl text-white font-mono text-[10px] font-bold tracking-widest" style="background: #C2410C;">
+            TL;DR
+          </div>
+          <div>
+            <div class="md:hidden mb-2 font-mono text-xs tracking-widest font-bold accent-text">TL;DR</div>
+            <p class="text-lg lg:text-xl leading-relaxed text-ink-700">
+              World Action Models repurpose pretrained video generators for control, yet a modality gap persists: action signals must conform to the generator's visual priors while preserving the dense cross-frame motion that control requires. FlowWAM closes this gap with <span class="accent-text font-semibold">optical flow</span>, a unified, video-native action representation that shares the RGB format, encodes spatially grounded per-pixel displacement, and is extractable from action-unlabeled video. A single shared <span class="font-semibold text-ink-900">dual-stream diffusion model</span> generates flow for action prediction, conditions on flow for world modeling, and pretrains on large-scale unlabeled video.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================ -->
+  <!-- 4. KEY STATS                                 -->
+  <!-- ============================================ -->
+  <section class="relative py-16">
+    <div class="mx-auto max-w-7xl px-5 lg:px-8">
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-5">
+
+        <div class="reveal stat-card lift rounded-2xl p-7">
+          <div class="text-[10px] font-mono tracking-[0.18em] text-ink-500 uppercase mb-3">RoboTwin · Clean</div>
+          <div class="font-display font-semibold num text-5xl lg:text-6xl leading-none text-ink-900">90.24<span class="text-3xl lg:text-4xl text-ink-400 font-medium">%</span></div>
+          <div class="mt-3 text-sm text-ink-500">Manipulation success rate</div>        </div>
+
+        <div class="reveal stat-card lift rounded-2xl p-7">
+          <div class="text-[10px] font-mono tracking-[0.18em] text-ink-500 uppercase mb-3">RoboTwin · Random</div>
+          <div class="font-display font-semibold num text-5xl lg:text-6xl leading-none text-ink-900">89.38<span class="text-3xl lg:text-4xl text-ink-400 font-medium">%</span></div>
+          <div class="mt-3 text-sm text-ink-500">Robust under random scenes</div>        </div>
+
+        <div class="reveal stat-card lift rounded-2xl p-7">
+          <div class="text-[10px] font-mono tracking-[0.18em] text-ink-500 uppercase mb-3">WorldArena · EWMScore</div>
+          <div class="font-display font-semibold num text-5xl lg:text-6xl leading-none text-ink-900">63.71</div>
+          <div class="mt-3 text-sm text-ink-500">State-of-the-art overall</div>        </div>
+
+        <div class="reveal stat-card lift rounded-2xl p-7">
+          <div class="text-[10px] font-mono tracking-[0.18em] text-ink-500 uppercase mb-3">Trajectory Accuracy</div>
+          <div class="font-display font-semibold num text-5xl lg:text-6xl leading-none text-ink-900">+18.4<span class="text-3xl lg:text-4xl text-ink-400 font-medium">%</span></div>
+          <div class="mt-3 text-sm text-ink-500">Relative improvement</div>        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================ -->
+  <!-- 5. TEASER                                    -->
+  <!-- ============================================ -->
+  <section class="relative py-12 lg:py-16">
+    <div class="mx-auto max-w-6xl px-5 lg:px-8">
+      <div class="reveal text-center mb-10">
+        <h2 class="font-display text-3xl lg:text-5xl mb-4" style="font-weight: 600; letter-spacing: -0.035em; line-height: 1.05;">
+          One representation. <span class="accent-text">Three superpowers.</span>
+        </h2>
+        <p class="text-ink-500 max-w-2xl mx-auto leading-relaxed">
+          FlowWAM bridges executable robot actions and pixel-space video priors via dense flow videos —
+          enabling action-unlabeled pretraining, policy inference, and action-conditioned world modeling
+          within the same framework.
+        </p>
+      </div>
+
+      <div class="reveal gradient-border p-3 lg:p-4">
+        <div class="rounded-2xl overflow-hidden bg-white">
+          <img src="./static/images/teaser.png" alt="FlowWAM teaser figure" class="w-full" />
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="grad-line max-w-5xl mx-auto my-12"></div>
+
+  <!-- ============================================ -->
+  <!-- 6. WHY OPTICAL FLOW?                         -->
+  <!-- ============================================ -->
+  <section class="relative py-16 lg:py-20">
+    <div class="mx-auto max-w-7xl px-5 lg:px-8">
+      <div class="text-center mb-14 reveal">
+        <div class="font-mono text-[13px] uppercase tracking-[0.22em] text-ink-500 mb-4">Why Optical Flow?</div>
+        <h2 class="font-display text-4xl lg:text-[3.75rem] mx-auto" style="font-weight: 600; letter-spacing: -0.035em; line-height: 1.02;">
+          A motion signal already <span class="accent-text whitespace-nowrap">video-native.</span>
+        </h2>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+
+        <div class="reveal lift rounded-2xl p-8 bg-white border border-ink-100/70">
+          <div class="w-11 h-11 rounded-xl flex items-center justify-center mb-5 text-orange-700 bg-orange-50">
+            <i class="fa-solid fa-shapes"></i>
+          </div>
+          <div class="font-mono text-[10px] tracking-[0.18em] uppercase text-ink-500 mb-3">01 · Uniformity</div>
+          <h3 class="font-display font-semibold text-[1.35rem] mb-3 text-ink-900" style="letter-spacing: -0.02em;">Same format as RGB</h3>
+          <p class="text-ink-500 text-[0.97rem]" style="line-height: 1.7;">
+            HSV color-wheel encoding maps per-pixel displacement into RGB images, closing the modality gap between control signals and pretrained video priors.
+          </p>
+        </div>
+
+        <div class="reveal lift rounded-2xl p-8 bg-white border border-ink-100/70">
+          <div class="w-11 h-11 rounded-xl flex items-center justify-center mb-5 text-orange-700 bg-orange-50">
+            <i class="fa-solid fa-bullseye"></i>
+          </div>
+          <div class="font-mono text-[10px] tracking-[0.18em] uppercase text-ink-500 mb-3">02 · Reliability</div>
+          <h3 class="font-display font-semibold text-[1.35rem] mb-3 text-ink-900" style="letter-spacing: -0.02em;">Dense pixel motion</h3>
+          <p class="text-ink-500 text-[0.97rem]" style="line-height: 1.7;">
+            A per-pixel motion field tightly steers video generation to follow the requested trajectory — far beyond sparse action tokens or static masks.
+          </p>
+        </div>
+
+        <div class="reveal lift rounded-2xl p-8 bg-white border border-ink-100/70">
+          <div class="w-11 h-11 rounded-xl flex items-center justify-center mb-5 text-orange-700 bg-orange-50">
+            <i class="fa-solid fa-expand-arrows-alt"></i>
+          </div>
+          <div class="font-mono text-[10px] tracking-[0.18em] uppercase text-ink-500 mb-3">03 · Scalability</div>
+          <h3 class="font-display font-semibold text-[1.35rem] mb-3 text-ink-900" style="letter-spacing: -0.02em;">No action labels needed</h3>
+          <p class="text-ink-500 text-[0.97rem]" style="line-height: 1.7;">
+            Flow is extractable directly from raw egocentric videos, so FlowWAM scales by absorbing motion priors from large unlabeled corpora.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================ -->
+  <!-- 7. METHOD                                    -->
+  <!-- ============================================ -->
+  <section id="method" class="relative py-20 lg:py-24">
+    <div class="relative mx-auto max-w-7xl px-5 lg:px-8">
+      <div class="text-center mb-14 reveal">
+        <div class="font-mono text-[13px] uppercase tracking-[0.22em] text-ink-500 mb-4">Method</div>
+        <h2 class="font-display text-4xl lg:text-[3.75rem]" style="font-weight: 600; letter-spacing: -0.035em; line-height: 1.02;">
+          A <span class="accent-text">dual-stream</span> diffusion transformer
+        </h2>
+      </div>
+
+      <div class="reveal gradient-border p-3 lg:p-4 mb-12">
+        <div class="rounded-2xl overflow-hidden bg-white">
+          <img src="./static/images/method.png" alt="FlowWAM method diagram" class="w-full" />
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+        <div class="reveal rounded-2xl p-8 bg-white border border-ink-100/70 lift">
+          <div class="font-mono text-[10px] tracking-[0.18em] uppercase text-ink-500 mb-3">Step 1</div>
+          <h4 class="font-display font-semibold text-[1.35rem] mb-3 text-ink-900" style="letter-spacing: -0.02em;">Flow RGB Encoding</h4>
+          <p class="text-ink-500 text-[0.97rem]" style="line-height: 1.7;">
+            Convert per-pixel optical flow into an RGB image via invertible HSV color-wheel encoding. Format-identical to scene frames — no separate action tokenizer needed.
+          </p>
+        </div>
+
+        <div class="reveal rounded-2xl p-8 bg-white border border-ink-100/70 lift">
+          <div class="font-mono text-[10px] tracking-[0.18em] uppercase text-ink-500 mb-3">Step 2</div>
+          <h4 class="font-display font-semibold text-[1.35rem] mb-3 text-ink-900" style="letter-spacing: -0.02em;">Shared DiT Backbone</h4>
+          <p class="text-ink-500 text-[0.97rem]" style="line-height: 1.7;">
+            RGB and flow latents share a frozen VAE encoder and all transformer blocks. Stream-specific only at patch embedding &amp; output head. Joint self-attention over concatenated tokens.
+          </p>
+        </div>
+
+        <div class="reveal rounded-2xl p-8 bg-white border border-ink-100/70 lift">
+          <div class="font-mono text-[10px] tracking-[0.18em] uppercase text-ink-500 mb-3">Step 3</div>
+          <h4 class="font-display font-semibold text-[1.35rem] mb-3 text-ink-900" style="letter-spacing: -0.02em;">Action Expert</h4>
+          <p class="text-ink-500 text-[0.97rem]" style="line-height: 1.7;">
+            A transformer that cross-attends to flow &amp; RGB tokens, conditions on proprioception, and predicts <i>N</i>-step action chunks under flow-matching — with stochastic latent conditioning to bridge train/inference.
+          </p>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================ -->
+  <!-- 8. TWO MODES                                 -->
+  <!-- ============================================ -->
+  <section id="modes" class="relative py-20 lg:py-24">
+    <div class="mx-auto max-w-7xl px-5 lg:px-8">
+      <div class="text-center mb-14 reveal">
+        <div class="font-mono text-[13px] uppercase tracking-[0.22em] text-ink-500 mb-4">Two Operating Modes</div>
+        <h2 class="font-display text-4xl lg:text-[3.75rem]" style="font-weight: 600; letter-spacing: -0.035em; line-height: 1.02;">
+          Generate flow. <span class="accent-text">Or condition on it.</span>
+        </h2>
+        <p class="text-ink-500 max-w-2xl mx-auto mt-5 leading-relaxed">
+          Both modes share the same dual-stream DiT. They differ only in whether the flow stream is unknown or observed.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
+
+        <!-- Policy Mode -->
+        <div class="reveal mode-card mode-policy">
+          <div class="relative h-full flex flex-col">
+            <div class="flex items-center justify-between mb-7">
+              <div class="label">Mode A</div>
+              <div class="w-11 h-11 rounded-xl flex items-center justify-center bg-orange-50 text-orange-700">
+                <i class="fa-solid fa-robot"></i>
+              </div>
+            </div>
+            <h3 class="font-display font-semibold text-3xl lg:text-[2.5rem] mb-2 text-ink-900" style="letter-spacing: -0.03em;">Policy Mode</h3>
+            <div class="font-mono text-[0.85rem] tracking-wide text-ink-400 mb-7">flow is <span class="text-orange-700 font-semibold">generated</span></div>
+            <p class="text-ink-500 text-[1.02rem] mb-7" style="line-height: 1.65;">
+              Both streams initialized from Gaussian noise and jointly denoised. The model synthesizes a future RGB rollout and its corresponding flow video — then the action expert decodes executable actions from the predicted motion plan.
+            </p>
+            <div class="mt-auto space-y-2.5 text-[0.95rem] text-ink-700">
+              <div class="flex items-center gap-3"><i class="fa-solid fa-arrow-right text-[10px] text-orange-600"></i> Generate future flow latents</div>
+              <div class="flex items-center gap-3"><i class="fa-solid fa-arrow-right text-[10px] text-orange-600"></i> Decode into N-step action chunk</div>
+              <div class="flex items-center gap-3"><i class="fa-solid fa-arrow-right text-[10px] text-orange-600"></i> Execute on robot</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- World-Model Mode -->
+        <div class="reveal mode-card mode-world">
+          <div class="relative h-full flex flex-col">
+            <div class="flex items-center justify-between mb-7">
+              <div class="label">Mode B</div>
+              <div class="w-11 h-11 rounded-xl flex items-center justify-center bg-amber-50 text-amber-700">
+                <i class="fa-solid fa-globe"></i>
+              </div>
+            </div>
+            <h3 class="font-display font-semibold text-3xl lg:text-[2.5rem] mb-2 text-ink-900" style="letter-spacing: -0.03em;">World-Model Mode</h3>
+            <div class="font-mono text-[0.85rem] tracking-wide text-ink-400 mb-7">flow is <span class="text-amber-700 font-semibold">provided</span></div>
+            <p class="text-ink-500 text-[1.02rem] mb-7" style="line-height: 1.65;">
+              Flow latents are set to the clean VAE encoding of a desired motion trajectory and held fixed. Only RGB is denoised. The model renders a future video that follows the specified motion — perfect for planning and policy evaluation.
+            </p>
+            <div class="mt-auto space-y-2.5 text-[0.95rem] text-ink-700">
+              <div class="flex items-center gap-3"><i class="fa-solid fa-arrow-right text-[10px] text-amber-600"></i> Provide target flow trajectory</div>
+              <div class="flex items-center gap-3"><i class="fa-solid fa-arrow-right text-[10px] text-amber-600"></i> Generate RGB future from noise</div>
+              <div class="flex items-center gap-3"><i class="fa-solid fa-arrow-right text-[10px] text-amber-600"></i> Use for evaluation &amp; planning</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="grad-line max-w-5xl mx-auto my-8"></div>
+
+  <!-- ============================================ -->
+  <!-- 9. EXPERIMENTS (Tabs)                        -->
+  <!-- ============================================ -->
+  <section id="experiments" class="relative py-20 lg:py-24">
+    <div class="mx-auto max-w-7xl px-5 lg:px-8">
+      <div class="text-center mb-12 reveal">
+        <div class="font-mono text-[13px] uppercase tracking-[0.22em] text-ink-500 mb-4">Experiments</div>
+        <h2 class="font-display text-4xl lg:text-[3.75rem]" style="font-weight: 600; letter-spacing: -0.035em; line-height: 1.02;">
+          Beating <span class="accent-text">VLA</span> and <span class="accent-text">WAM</span> baselines.
+        </h2>
+      </div>
+
+      <!-- Tab buttons -->
+      <div class="reveal flex justify-center mb-10">
+        <div class="inline-flex glass rounded-full p-1.5 gap-1">
+          <button data-tab="robotwin" class="tab-pill px-5 lg:px-7 py-2.5 rounded-full text-sm font-medium transition-all" aria-selected="true">
+            RoboTwin 2.0
+          </button>
+          <button data-tab="worldarena" class="tab-pill px-5 lg:px-7 py-2.5 rounded-full text-sm font-medium transition-all" aria-selected="false">
+            WorldArena
+          </button>
+          <button data-tab="realworld" class="tab-pill px-5 lg:px-7 py-2.5 rounded-full text-sm font-medium transition-all" aria-selected="false">
+            Real-World
+          </button>
+        </div>
+      </div>
+
+      <!-- Tab: RoboTwin -->
+      <div id="tab-robotwin" class="tab-panel reveal">
+        <div class="rounded-2xl bg-white border border-ink-100/70 p-7 lg:p-10 mb-8 overflow-x-auto">
+          <h3 class="font-display font-semibold text-2xl mb-2 text-ink-900" style="letter-spacing: -0.025em;">Manipulation Policy on RoboTwin 2.0</h3>
+          <p class="text-[0.95rem] text-ink-500 mb-7 leading-relaxed max-w-3xl">
+            Average success rate over 50 bimanual tasks — <i>Clean</i> setting (fixed layout/lighting) and <i>Random</i> setting (randomized object pose, distractors, lighting, background).
+          </p>
+          <table class="ftable">
+            <thead>
+              <tr>
+                <th class="!text-left">Method</th>
+                <th>Type</th>
+                <th>Clean</th>
+                <th>Random</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td class="name">π<sub>0.5</sub></td><td class="type-cell">VLA</td><td class="num-cell">42.98%</td><td class="num-cell">43.84%</td></tr>
+              <tr><td class="name">X-VLA</td><td class="type-cell">VLA</td><td class="num-cell">72.88%</td><td class="num-cell">72.84%</td></tr>
+              <tr><td class="name">Motus</td><td class="type-cell">WAM</td><td class="num-cell">88.66%</td><td class="num-cell">87.02%</td></tr>
+              <tr><td class="name">GigaWorld-Policy</td><td class="type-cell">WAM</td><td class="num-cell">86.36%</td><td class="num-cell">85.04%</td></tr>
+              <tr><td class="name">FlowWAM <span class="text-ink-400 font-normal text-sm">(w/o pretrain)</span></td><td class="type-cell">WAM</td><td class="num-cell">82.40%</td><td class="num-cell">80.80%</td></tr>
+              <tr class="highlight">
+                <td class="name">★ FlowWAM <span class="text-ink-500 font-normal text-sm">(w/ pretrain)</span></td>
+                <td class="type-cell">WAM</td>
+                <td class="num-cell best">90.24%</td>
+                <td class="num-cell best">89.38%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tab: WorldArena -->
+      <div id="tab-worldarena" class="tab-panel hidden">
+        <div class="rounded-2xl bg-white border border-ink-100/70 p-7 lg:p-10 mb-8 overflow-x-auto">
+          <h3 class="font-display font-semibold text-2xl mb-2 text-ink-900" style="letter-spacing: -0.025em;">Action-Conditioned World Modeling on WorldArena</h3>
+          <p class="text-[0.95rem] text-ink-500 mb-7 leading-relaxed max-w-3xl">
+            6 headline metrics + overall EWMScore over 121-frame rollouts at 24 fps. <span class="font-semibold text-ink-700">Bold</span> = best.
+          </p>
+          <table class="ftable">
+            <thead>
+              <tr>
+                <th class="!text-left">Method</th>
+                <th>Cond.</th>
+                <th>JEPA</th>
+                <th>Subj.</th>
+                <th>Bg.</th>
+                <th>Traj.</th>
+                <th>Depth</th>
+                <th>Sem.</th>
+                <th>EWMScore</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td class="name">CogVideoX</td><td class="type-cell">Text</td><td class="num-cell">94.84</td><td class="num-cell">80.97</td><td class="num-cell">88.38</td><td class="num-cell">34.79</td><td class="num-cell">91.09</td><td class="num-cell">89.70</td><td class="num-cell">58.79</td></tr>
+              <tr><td class="name">Veo 3.1</td><td class="type-cell">Text</td><td class="num-cell">57.97</td><td class="num-cell">75.82</td><td class="num-cell best">91.67</td><td class="num-cell">11.36</td><td class="num-cell">74.27</td><td class="num-cell">83.79</td><td class="num-cell">57.77</td></tr>
+              <tr><td class="name">Cosmos-Predict 2.5</td><td class="type-cell">Action</td><td class="num-cell">90.65</td><td class="num-cell">67.24</td><td class="num-cell">72.72</td><td class="num-cell">27.49</td><td class="num-cell">90.35</td><td class="num-cell">89.86</td><td class="num-cell">54.29</td></tr>
+              <tr><td class="name">IRASim</td><td class="type-cell">Action</td><td class="num-cell">93.72</td><td class="num-cell">72.82</td><td class="num-cell">78.69</td><td class="num-cell">35.92</td><td class="num-cell">93.50</td><td class="num-cell">89.43</td><td class="num-cell">56.15</td></tr>
+              <tr><td class="name">Ctrl-World</td><td class="type-cell">Action</td><td class="num-cell">92.77</td><td class="num-cell best">83.56</td><td class="num-cell">90.30</td><td class="num-cell">48.20</td><td class="num-cell">93.25</td><td class="num-cell">88.68</td><td class="num-cell">59.98</td></tr>
+              <tr><td class="name">GigaWorld-1</td><td class="type-cell">Img-Act</td><td class="num-cell">96.77</td><td class="num-cell">80.97</td><td class="num-cell">86.43</td><td class="num-cell">54.27</td><td class="num-cell">98.44</td><td class="num-cell">89.42</td><td class="num-cell">62.34</td></tr>
+              <tr class="highlight">
+                <td class="name">★ FlowWAM (Ours)</td>
+                <td class="type-cell" style="color:#9A3412; font-weight:700;">Flow</td>
+                <td class="num-cell best">97.14</td>
+                <td class="num-cell">82.46</td>
+                <td class="num-cell">89.97</td>
+                <td class="num-cell best">64.26</td>
+                <td class="num-cell best">98.97</td>
+                <td class="num-cell best">89.93</td>
+                <td class="num-cell best">63.71</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- WorldArena highlight cards -->
+        <div class="grid grid-cols-2 lg:grid-cols-3 gap-4">
+          <div class="rounded-2xl p-6 bg-white border border-ink-100/70 lift">
+            <div class="text-[10px] font-mono uppercase tracking-[0.18em] text-ink-500 mb-3">Trajectory Accuracy</div>
+            <div class="font-display font-semibold num text-4xl accent-text">64.26</div>
+            <div class="text-[0.85rem] text-ink-500 mt-2">+18.4% over runner-up</div>
+          </div>
+          <div class="rounded-2xl p-6 bg-white border border-ink-100/70 lift">
+            <div class="text-[10px] font-mono uppercase tracking-[0.18em] text-ink-500 mb-3">Depth Accuracy</div>
+            <div class="font-display font-semibold num text-4xl accent-text">98.97</div>
+            <div class="text-[0.85rem] text-ink-500 mt-2">Best in class</div>
+          </div>
+          <div class="rounded-2xl p-6 bg-white border border-ink-100/70 lift">
+            <div class="text-[10px] font-mono uppercase tracking-[0.18em] text-ink-500 mb-3">JEPA Similarity</div>
+            <div class="font-display font-semibold num text-4xl accent-text">97.14</div>
+            <div class="text-[0.85rem] text-ink-500 mt-2">Best in class</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: Real-World -->
+      <div id="tab-realworld" class="tab-panel hidden">
+        <div class="rounded-2xl bg-white border border-ink-100/70 p-7 lg:p-10 mb-8">
+          <h3 class="font-display font-semibold text-2xl mb-2 text-ink-900" style="letter-spacing: -0.025em;">Real-World Manipulation</h3>
+          <p class="text-[0.95rem] text-ink-500 mb-7 leading-relaxed max-w-3xl">
+            7 tasks across Franka (single-arm) and ARX (dual-arm). 100 teleoperated demos per task, 10 trials with randomized object poses. FlowWAM averages <span class="font-semibold text-ink-900 num">75.7%</span> vs π<sub>0.5</sub> <span class="num">61.4%</span> and Motus <span class="num">57.1%</span>.
+          </p>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div>
+              <h4 class="font-mono text-[10px] tracking-[0.18em] uppercase text-ink-500 mb-4">Single-Arm · Franka</h4>
+              <ul class="space-y-2.5 text-[0.95rem] text-ink-700">
+                <li class="flex items-center gap-3"><span class="w-1.5 h-1.5 rounded-full bg-ink-300"></span> Stack Bowls</li>
+                <li class="flex items-center gap-3"><span class="w-1.5 h-1.5 rounded-full bg-ink-300"></span> Place in Drawer</li>
+                <li class="flex items-center gap-3"><span class="w-1.5 h-1.5 rounded-full bg-ink-300"></span> Put in Plate</li>
+                <li class="flex items-center gap-3"><span class="w-1.5 h-1.5 rounded-full bg-ink-300"></span> Place Two Cups</li>
+              </ul>
+            </div>
+            <div>
+              <h4 class="font-mono text-[10px] tracking-[0.18em] uppercase text-ink-500 mb-4">Dual-Arm · ARX</h4>
+              <ul class="space-y-2.5 text-[0.95rem] text-ink-700">
+                <li class="flex items-center gap-3"><span class="w-1.5 h-1.5 rounded-full bg-ink-300"></span> Fold Towel</li>
+                <li class="flex items-center gap-3"><span class="w-1.5 h-1.5 rounded-full bg-ink-300"></span> Stack Bowls</li>
+                <li class="flex items-center gap-3"><span class="w-1.5 h-1.5 rounded-full bg-ink-300"></span> Clean Plate</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="gradient-border p-3 lg:p-4">
+          <div class="rounded-2xl overflow-hidden bg-white">
+            <img src="./static/images/realworld.png" alt="Real-world success rates" class="w-full" />
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================ -->
+  <!-- 10. QUALITATIVE RESULTS                      -->
+  <!-- ============================================ -->
+  <section id="results" class="relative py-20 lg:py-24">
+    <div class="relative mx-auto max-w-7xl px-5 lg:px-8">
+      <div class="text-center mb-12 reveal">
+        <div class="font-mono text-[13px] uppercase tracking-[0.22em] text-ink-500 mb-4">Qualitative Results</div>
+        <h2 class="font-display text-4xl lg:text-[3.75rem]" style="font-weight: 600; letter-spacing: -0.035em; line-height: 1.02;">
+          Watch <span class="accent-text">flow</span> in action.
+        </h2>
+      </div>
+
+      <!-- Gallery 1: Policy Mode (RoboTwin Clean / Random sub-tabs) -->
+      <div class="reveal mb-14 video-gallery" data-gallery="policy">
+        <div class="mb-5">
+          <h3 class="font-display font-semibold text-[1.4rem]" style="letter-spacing: -0.025em;">Policy Mode <span class="text-ink-400 font-normal">— Predicted Flow Trajectories</span></h3>
+        </div>
+        <div class="flex justify-center mb-6" data-subtabs-wrap>
+          <div class="inline-flex glass rounded-full p-1.5 gap-1.5" data-subtabs></div>
+        </div>
+        <div class="rounded-2xl overflow-hidden aspect-video relative" data-stage style="background: #FAF8F4;">
+          <video data-video autoplay muted loop playsinline class="w-full h-full object-contain" style="transition: opacity 0.3s ease;"></video>
+          <div class="absolute inset-y-0 left-0 flex items-center pl-3 sm:pl-4 z-10">
+            <button aria-label="Previous" class="gallery-prev gallery-nav glass w-12 h-12 rounded-full flex items-center justify-center"><i class="fa-solid fa-chevron-left text-sm"></i></button>
+          </div>
+          <div class="absolute inset-y-0 right-0 flex items-center pr-3 sm:pr-4 z-10">
+            <button aria-label="Next" class="gallery-next gallery-nav glass w-12 h-12 rounded-full flex items-center justify-center"><i class="fa-solid fa-chevron-right text-sm"></i></button>
+          </div>
+        </div>
+        <div class="flex justify-center mt-5">
+          <div class="inline-flex items-center gap-2.5 px-4 py-2.5 glass rounded-full" data-dots></div>
+        </div>
+      </div>
+
+      <!-- Gallery 2: World-Model Mode (single set, no sub-tabs) -->
+      <div class="reveal mb-14 video-gallery" data-gallery="world">
+        <div class="mb-5">
+          <h3 class="font-display font-semibold text-[1.4rem]" style="letter-spacing: -0.025em;">World-Model Mode <span class="text-ink-400 font-normal">— Flow-Conditioned Generation</span></h3>
+        </div>
+        <div class="flex justify-center mb-6" data-subtabs-wrap>
+          <div class="inline-flex glass rounded-full p-1.5 gap-1.5" data-subtabs></div>
+        </div>
+        <div class="rounded-2xl overflow-hidden aspect-video relative" data-stage style="background: #FAF8F4;">
+          <video data-video autoplay muted loop playsinline class="w-full h-full object-contain" style="transition: opacity 0.3s ease;"></video>
+          <div class="absolute inset-y-0 left-0 flex items-center pl-3 sm:pl-4 z-10">
+            <button aria-label="Previous" class="gallery-prev gallery-nav glass w-12 h-12 rounded-full flex items-center justify-center"><i class="fa-solid fa-chevron-left text-sm"></i></button>
+          </div>
+          <div class="absolute inset-y-0 right-0 flex items-center pr-3 sm:pr-4 z-10">
+            <button aria-label="Next" class="gallery-next gallery-nav glass w-12 h-12 rounded-full flex items-center justify-center"><i class="fa-solid fa-chevron-right text-sm"></i></button>
+          </div>
+        </div>
+        <div class="flex justify-center mt-5">
+          <div class="inline-flex items-center gap-2.5 px-4 py-2.5 glass rounded-full" data-dots></div>
+        </div>
+      </div>
+
+      <!-- Gallery 3: Real-World (ARX / Franka sub-tabs) -->
+      <div class="reveal video-gallery" data-gallery="real">
+        <div class="mb-5">
+          <h3 class="font-display font-semibold text-[1.4rem]" style="letter-spacing: -0.025em;">Real-World <span class="text-ink-400 font-normal">— Rollouts</span></h3>
+        </div>
+        <div class="flex justify-center mb-6" data-subtabs-wrap>
+          <div class="inline-flex glass rounded-full p-1.5 gap-1.5" data-subtabs></div>
+        </div>
+        <div class="rounded-2xl overflow-hidden aspect-video relative" data-stage style="background: #FAF8F4;">
+          <video data-video autoplay muted loop playsinline class="w-full h-full object-contain" style="transition: opacity 0.3s ease;"></video>
+          <div class="absolute inset-y-0 left-0 flex items-center pl-3 sm:pl-4 z-10">
+            <button aria-label="Previous" class="gallery-prev gallery-nav glass w-12 h-12 rounded-full flex items-center justify-center"><i class="fa-solid fa-chevron-left text-sm"></i></button>
+          </div>
+          <div class="absolute inset-y-0 right-0 flex items-center pr-3 sm:pr-4 z-10">
+            <button aria-label="Next" class="gallery-next gallery-nav glass w-12 h-12 rounded-full flex items-center justify-center"><i class="fa-solid fa-chevron-right text-sm"></i></button>
+          </div>
+        </div>
+        <div class="flex justify-center mt-5">
+          <div class="inline-flex items-center gap-2.5 px-4 py-2.5 glass rounded-full" data-dots></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================ -->
+  <!-- 11. BIBTEX                                   -->
+  <!-- ============================================ -->
+  <section id="bibtex" class="relative py-20 lg:py-24">
+    <div class="mx-auto max-w-5xl px-5 lg:px-8">
+      <div class="text-center mb-10 reveal">
+        <div class="font-mono text-[13px] uppercase tracking-[0.22em] text-ink-500 mb-4">Citation</div>
+        <h2 class="font-display text-4xl lg:text-5xl" style="font-weight: 600; letter-spacing: -0.035em;">
+          Cite <span class="accent-text">FlowWAM</span>
+        </h2>
+      </div>
+
+      <div class="reveal relative">
+        <button id="copyBib" class="absolute top-4 right-4 z-10 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm transition flex items-center gap-2">
+          <i class="fa-solid fa-copy text-xs"></i>
+          <span id="copyLabel">Copy</span>
+        </button>
+        <pre class="bibtex"><code id="bibText">@misc{chen2026flowwam,
+    title  = {FlowWAM: Optical Flow as a Unified Action Representation for World Action Models},
+    author = {Yixiang Chen and Peiyan Li and Yuan Xu and Qisen Ma and Jiabing Yang and Kai Wang and Jianhua Yang and Dong An and He Guan and Gaoteng Liu and Jianlou Si and Jun Huang and Jing Liu and Nianfeng Liu and Yan Huang and Liang Wang},
+    year   = {2026},
+    eprint = {arXiv:XXXX.XXXXX},
+    archivePrefix = {arXiv},
+    primaryClass  = {cs.RO},
+    url    = {https://arxiv.org/abs/XXXX.XXXXX}
+}</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================ -->
+  <!-- FOOTER                                       -->
+  <!-- ============================================ -->
+  <footer class="relative py-14 border-t border-ink-100/60">
+    <div class="mx-auto max-w-7xl px-5 lg:px-8">
+      <div class="flex justify-center items-center gap-6">
+        <div class="flex items-center gap-3">
+          <div class="logo-frame w-10 h-10 overflow-hidden">
+            <img src="./static/images/icon_light.png" alt="FlowWAM" class="w-full h-full object-contain" />
+          </div>
+          <div>
+            <div class="font-display font-semibold text-base accent-text">FlowWAM</div>
+            <div class="text-xs text-ink-400">© 2026 · CASIA-NLPR</div>
+          </div>
+        </div>
+      </div>
+      <div class="mt-6 text-center text-[11px] text-ink-400">
+        FlowWAM — optical flow as a unified action representation for world action models.
+      </div>
+    </div>
+  </footer>
+
+  <!-- ============================================ -->
+  <!-- JAVASCRIPT                                   -->
+  <!-- ============================================ -->
+  <script>
+    // === Scroll reveal ===
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((e) => {
+        if (e.isIntersecting) {
+          e.target.classList.add('in');
+          io.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.12 });
+    document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
+
+    // === Tab switcher (Experiments) ===
+    const tabBtns = document.querySelectorAll('.tab-pill');
+    const tabPanels = document.querySelectorAll('.tab-panel');
+    function selectTab(name) {
+      tabBtns.forEach((b) => {
+        const active = b.dataset.tab === name;
+        b.setAttribute('aria-selected', active ? 'true' : 'false');
+        if (active) {
+          b.style.background = '#C2410C';
+          b.style.color = 'white';
+          b.style.boxShadow = '0 4px 14px -6px rgba(194,65,12,0.4)';
+        } else {
+          b.style.background = 'transparent';
+          b.style.color = '#57534E';
+          b.style.boxShadow = 'none';
+        }
+      });
+      tabPanels.forEach((p) => {
+        p.classList.toggle('hidden', p.id !== `tab-${name}`);
+      });
+    }
+    tabBtns.forEach((b) => b.addEventListener('click', () => selectTab(b.dataset.tab)));
+    selectTab('robotwin');
+
+    // === Video galleries (single video, sub-tab datasets, left/right looping) ===
+    const GALLERIES = {
+      policy: [
+        { id: 'clean', label: 'RoboTwin Clean', dir: './static/videos/robotwin_clean/', videos: [
+          ['hang_mug.mp4', 'Hang Mug'],
+          ['adjust_bottle.mp4', 'Adjust Bottle'],
+          ['pick_dual_bottles.mp4', 'Pick Dual Bottles'],
+          ['open_microwave.mp4', 'Open Microwave'],
+          ['move_stapler.mp4', 'Move Stapler'],
+          ['shake_bottle.mp4', 'Shake Bottle'],
+          ['move_pillbottle.mp4', 'Move Pill Bottle'],
+        ] },
+        { id: 'random', label: 'RoboTwin Random', dir: './static/videos/robotwin_random/', videos: [
+          ['stack_blocks_1.mp4', 'Stack Blocks'],
+          ['scan_object.mp4', 'Scan Object'],
+          ['put_in_cabinet.mp4', 'Put in Cabinet'],
+          ['place_cans.mp4', 'Place Cans'],
+          ['place_a2b.mp4', 'Place A → B'],
+          ['move_can.mp4', 'Move Can to Pot'],
+          ['stack_blocks_2.mp4', 'Stack Blocks II'],
+        ] },
+      ],
+      world: [
+        { id: 'wm', label: null, dir: './static/videos/world_model/', videos: [
+          ['adjust_bottle.mp4', 'Adjust Bottle'],
+          ['click_bell.mp4', 'Click Bell'],
+          ['lift_pot.mp4', 'Lift Pot'],
+          ['open_laptop.mp4', 'Open Laptop'],
+          ['place_bread.mp4', 'Place Bread in Basket'],
+          ['place_container.mp4', 'Place Container on Plate'],
+          ['place_on_scale.mp4', 'Place Object on Scale'],
+          ['stack_blocks.mp4', 'Stack Blocks'],
+          ['turn_switch.mp4', 'Turn Switch'],
+        ] },
+      ],
+      real: [
+        { id: 'arx', label: 'ARX', dir: './static/videos/arx/', videos: [
+          ['wipe_plate.mp4', 'Wipe Plate'],
+          ['handover.mp4', 'Handover'],
+          ['stack_bowls.mp4', 'Stack Bowls'],
+        ] },
+        { id: 'franka', label: 'Franka', dir: './static/videos/franka/', videos: [
+          ['task_1.mp4', 'Task 1'],
+          ['task_2.mp4', 'Task 2'],
+          ['task_3.mp4', 'Task 3'],
+          ['task_4.mp4', 'Task 4'],
+        ] },
+      ],
+    };
+
+    // Warm neighbor clips so left/right switching is instant (deduplicated).
+    const _prefetched = new Set();
+    function prefetchVideo(url) {
+      if (_prefetched.has(url)) return;
+      _prefetched.add(url);
+      const l = document.createElement('link');
+      l.rel = 'prefetch';
+      l.href = url;
+      document.head.appendChild(l);
+    }
+
+    function setupGallery(key) {
+      const root = document.querySelector(`[data-gallery="${key}"]`);
+      if (!root) return;
+      const subs = GALLERIES[key];
+      const subtabsBox = root.querySelector('[data-subtabs]');
+      const subtabsWrap = root.querySelector('[data-subtabs-wrap]');
+      const video = root.querySelector('[data-video]');
+      const dotsBox = root.querySelector('[data-dots]');
+      const prevBtn = root.querySelector('.gallery-prev');
+      const nextBtn = root.querySelector('.gallery-next');
+      let s = 0; // active sub-tab index
+      let v = 0; // active video index
+      let fadeTimer = null;
+
+      const cur = () => subs[s];
+
+      function syncDots() {
+        dotsBox.querySelectorAll('.dot').forEach((d, i) => {
+          const active = i === v;
+          d.classList.toggle('active', active);
+          if (active) { d.setAttribute('aria-current', 'true'); }
+          else { d.removeAttribute('aria-current'); }
+        });
+      }
+
+      function showVideo() {
+        const sub = cur();
+        const [file, label] = sub.videos[v];
+        if (fadeTimer) clearTimeout(fadeTimer);
+        video.style.opacity = '0';
+        // Start loading immediately (no artificial delay); fade in on first frame.
+        video.src = sub.dir + file;
+        video.load();
+        const p = video.play();
+        if (p) p.catch(() => {});
+        const reveal = () => { video.style.opacity = '1'; };
+        video.addEventListener('loadeddata', reveal, { once: true });
+        fadeTimer = setTimeout(reveal, 600); // safety: never stay blank
+        video.setAttribute('aria-label', `${label} — video ${v + 1} of ${sub.videos.length}`);
+        syncDots();
+        // Prefetch the next & previous clips for instant switching.
+        const n = sub.videos.length;
+        if (n > 1) {
+          prefetchVideo(sub.dir + sub.videos[(v + 1) % n][0]);
+          prefetchVideo(sub.dir + sub.videos[(v - 1 + n) % n][0]);
+        }
+      }
+
+      function makeDots() {
+        dotsBox.innerHTML = '';
+        cur().videos.forEach((_, i) => {
+          const d = document.createElement('button');
+          d.type = 'button';
+          d.className = 'dot';
+          d.setAttribute('aria-label', `Video ${i + 1} of ${cur().videos.length}`);
+          d.addEventListener('click', () => { v = i; showVideo(); });
+          dotsBox.appendChild(d);
+        });
+      }
+
+      function selectSub(i) {
+        s = i;
+        v = 0;
+        subtabsBox.querySelectorAll('.subtab').forEach((b, j) => {
+          const on = j === i;
+          b.classList.toggle('active', on);
+          b.setAttribute('aria-selected', on ? 'true' : 'false');
+        });
+        makeDots();
+        showVideo();
+      }
+
+      // Build sub-tabs only when there is more than one dataset (or it carries a label).
+      const showSubtabs = subs.length > 1 || subs[0].label != null;
+      if (showSubtabs) {
+        subtabsBox.setAttribute('role', 'tablist');
+        subs.forEach((sub, i) => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'subtab';
+          b.setAttribute('role', 'tab');
+          b.setAttribute('aria-selected', i === 0 ? 'true' : 'false');
+          b.textContent = sub.label;
+          b.addEventListener('click', () => selectSub(i));
+          subtabsBox.appendChild(b);
+        });
+      } else {
+        (subtabsWrap || subtabsBox).classList.add('hidden');
+      }
+
+      // Left/right looping within the active dataset.
+      prevBtn?.addEventListener('click', () => { v = v <= 0 ? cur().videos.length - 1 : v - 1; showVideo(); });
+      nextBtn?.addEventListener('click', () => { v = v >= cur().videos.length - 1 ? 0 : v + 1; showVideo(); });
+
+      selectSub(0);
+    }
+    ['policy', 'world', 'real'].forEach(setupGallery);
+
+    // === Copy bibtex ===
+    document.getElementById('copyBib')?.addEventListener('click', async () => {
+      const txt = document.getElementById('bibText').innerText;
+      try {
+        await navigator.clipboard.writeText(txt);
+        const label = document.getElementById('copyLabel');
+        label.textContent = 'Copied!';
+        setTimeout(() => (label.textContent = 'Copy'), 1800);
+      } catch (e) {
+        console.error(e);
+      }
+    });
+  </script>
+</body>
+</html>

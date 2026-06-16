@@ -1,0 +1,22 @@
+# OS files (matches at any depth)
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*~
+
+# Python (local preview server)
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Claude Code
+.claude/
